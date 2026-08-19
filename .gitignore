@@ -1,0 +1,20 @@
+# Build outputs
+**/Debug/
+**/Release/
+
+# Generated files
+*.elf
+*.hex
+*.bin
+*.map
+*.list
+*.o
+*.d
+*.su
+*.cyclo
+
+# Eclipse temporary
+.metadata/
+
+# Optional
+**/.settings/language.settings.xml
