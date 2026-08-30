@@ -33,6 +33,7 @@
 /* USER CODE BEGIN PD */
 #define MOTOR_ADC_TRIGGER_DELAY_TICKS 340U
 #define MOTOR_COMP_BLANKING_TICKS     340U
+#define MOTOR_COMP_THRESHOLD_DAC 4U// 1241U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -45,6 +46,8 @@ ADC_HandleTypeDef hadc1;
 ADC_HandleTypeDef hadc2;
 
 COMP_HandleTypeDef hcomp3;
+
+DAC_HandleTypeDef hdac1;
 
 OPAMP_HandleTypeDef hopamp1;
 
@@ -69,6 +72,7 @@ static void MX_ADC1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_DAC1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -115,12 +119,18 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
+  MX_DAC1_Init();
   /* USER CODE BEGIN 2 */
 
   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, MOTOR_ADC_TRIGGER_DELAY_TICKS);
   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, MOTOR_COMP_BLANKING_TICKS);
+  /* Nastavení konstantního prahu COMP3 pomocí DAC1_CH1 */
+  if (HAL_DAC_Start(&hdac1, DAC_CHANNEL_1) != HAL_OK)
+  { Error_Handler(); }
+  if (HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, MOTOR_COMP_THRESHOLD_DAC) != HAL_OK)
+  { Error_Handler(); }
 
-  HAL_COMP_Start(&hcomp3);
+  HAL_OPAMP_Start(&hopamp1);
   HAL_ADCEx_InjectedStart(&hadc1);
   HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_4);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_5);
@@ -131,6 +141,7 @@ int main(void)
   HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
   HAL_TIM_Base_Start_IT(&htim2);
   HAL_TIM_Base_Start_IT(&htim3);
+  HAL_COMP_Start(&hcomp3);//t
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -340,7 +351,7 @@ static void MX_COMP3_Init(void)
   /* USER CODE END COMP3_Init 1 */
   hcomp3.Instance = COMP3;
   hcomp3.Init.InputPlus = COMP_INPUT_PLUS_IO1;
-  hcomp3.Init.InputMinus = COMP_INPUT_MINUS_3_4VREFINT;
+  hcomp3.Init.InputMinus = COMP_INPUT_MINUS_DAC1_CH1;
   hcomp3.Init.OutputPol = COMP_OUTPUTPOL_NONINVERTED;
   hcomp3.Init.Hysteresis = COMP_HYSTERESIS_NONE;
   hcomp3.Init.BlankingSrce = COMP_BLANKINGSRC_NONE;
@@ -350,9 +361,56 @@ static void MX_COMP3_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN COMP3_Init 2 */
-  MODIFY_REG(COMP3->CSR, COMP_CSR_BLANKING, COMP_BLANKINGSRC_TIM1_OC5_COMP3);
+ // MODIFY_REG(COMP3->CSR, COMP_CSR_BLANKING, COMP_BLANKINGSRC_TIM1_OC5_COMP3);
 
   /* USER CODE END COMP3_Init 2 */
+
+}
+
+/**
+  * @brief DAC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_DAC1_Init(void)
+{
+
+  /* USER CODE BEGIN DAC1_Init 0 */
+
+  /* USER CODE END DAC1_Init 0 */
+
+  DAC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN DAC1_Init 1 */
+
+  /* USER CODE END DAC1_Init 1 */
+
+  /** DAC Initialization
+  */
+  hdac1.Instance = DAC1;
+  if (HAL_DAC_Init(&hdac1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** DAC channel OUT1 config
+  */
+  sConfig.DAC_HighFrequency = DAC_HIGH_FREQUENCY_INTERFACE_MODE_AUTOMATIC;
+  sConfig.DAC_DMADoubleDataMode = DISABLE;
+  sConfig.DAC_SignedFormat = DISABLE;
+  sConfig.DAC_SampleAndHold = DAC_SAMPLEANDHOLD_DISABLE;
+  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
+  sConfig.DAC_Trigger2 = DAC_TRIGGER_NONE;
+  sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_DISABLE;
+  sConfig.DAC_ConnectOnChipPeripheral = DAC_CHIPCONNECT_INTERNAL;
+  sConfig.DAC_UserTrimming = DAC_TRIMMING_FACTORY;
+  if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN DAC1_Init 2 */
+
+  /* USER CODE END DAC1_Init 2 */
 
 }
 
@@ -377,15 +435,15 @@ static void MX_OPAMP1_Init(void)
   hopamp1.Init.NonInvertingInput = OPAMP_NONINVERTINGINPUT_IO0;
   hopamp1.Init.InternalOutput = DISABLE;
   hopamp1.Init.TimerControlledMuxmode = OPAMP_TIMERCONTROLLEDMUXMODE_DISABLE;
-  hopamp1.Init.PgaConnect = OPAMP_PGA_CONNECT_INVERTINGINPUT_IO0_BIAS;
-  hopamp1.Init.PgaGain = OPAMP_PGA_GAIN_2_OR_MINUS_1;
+  hopamp1.Init.PgaConnect = OPAMP_PGA_CONNECT_INVERTINGINPUT_IO0;
+  hopamp1.Init.PgaGain = OPAMP_PGA_GAIN_64_OR_MINUS_63;
   hopamp1.Init.UserTrimming = OPAMP_TRIMMING_FACTORY;
   if (HAL_OPAMP_Init(&hopamp1) != HAL_OK)
   {
     Error_Handler();
   }
   /* USER CODE BEGIN OPAMP1_Init 2 */
-
+  //hopamp1.Init.InternalOutput = DISABLE;
   /* USER CODE END OPAMP1_Init 2 */
 
 }
@@ -413,7 +471,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 0;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 65535;
+  htim1.Init.Period = 6799;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
