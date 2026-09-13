@@ -75,8 +75,10 @@ void Error_Handler(void);
 #define ZAV_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
+#define ADC1_DMA_BUFFER_LENGTH 100U
 extern ADC_ChannelConfTypeDef newConfig;
-extern volatile uint16_t ADC1_InjectedValue;
+extern volatile uint16_t ADC1_LastValue;
+extern volatile uint16_t ADC1_DMA_Buffer[ADC1_DMA_BUFFER_LENGTH];
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
