@@ -33,7 +33,7 @@
 /* USER CODE BEGIN PD */
 #define MOTOR_ADC_TRIGGER_DELAY_TICKS 340U
 #define MOTOR_COMP_BLANKING_TICKS     340U
-#define MOTOR_COMP_THRESHOLD_DAC 4U// 1241U
+#define MOTOR_COMP_THRESHOLD_DAC 124U// 1241U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -59,6 +59,7 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 int atest;
+ADC_ChannelConfTypeDef newConfig;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -132,16 +133,15 @@ int main(void)
 
   HAL_OPAMP_Start(&hopamp1);
   HAL_ADCEx_InjectedStart(&hadc1);
+  HAL_COMP_Start(&hcomp3);//t
   HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_4);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_5);
-
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
   HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
   HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
   HAL_TIM_Base_Start_IT(&htim2);
   HAL_TIM_Base_Start_IT(&htim3);
-  HAL_COMP_Start(&hcomp3);//t
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -329,6 +329,7 @@ static void MX_ADC2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN ADC2_Init 2 */
+  newConfig= sConfig;
 
   /* USER CODE END ADC2_Init 2 */
 
@@ -347,7 +348,7 @@ static void MX_COMP3_Init(void)
   /* USER CODE END COMP3_Init 0 */
 
   /* USER CODE BEGIN COMP3_Init 1 */
-
+  	hcomp3.Init.BlankingSrce =COMP_BLANKINGSRC_TIM1_OC5_COMP3;
   /* USER CODE END COMP3_Init 1 */
   hcomp3.Instance = COMP3;
   hcomp3.Init.InputPlus = COMP_INPUT_PLUS_IO1;
@@ -361,8 +362,9 @@ static void MX_COMP3_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN COMP3_Init 2 */
- // MODIFY_REG(COMP3->CSR, COMP_CSR_BLANKING, COMP_BLANKINGSRC_TIM1_OC5_COMP3);
 
+ //hcomp3.Init.BlankingSrce =COMP_BLANKINGSRC_TIM1_OC5_COMP3;
+  MODIFY_REG(COMP3->CSR, COMP_CSR_BLANKING, COMP_BLANKINGSRC_TIM1_OC5_COMP3);
   /* USER CODE END COMP3_Init 2 */
 
 }
@@ -436,7 +438,7 @@ static void MX_OPAMP1_Init(void)
   hopamp1.Init.InternalOutput = DISABLE;
   hopamp1.Init.TimerControlledMuxmode = OPAMP_TIMERCONTROLLEDMUXMODE_DISABLE;
   hopamp1.Init.PgaConnect = OPAMP_PGA_CONNECT_INVERTINGINPUT_IO0;
-  hopamp1.Init.PgaGain = OPAMP_PGA_GAIN_64_OR_MINUS_63;
+  hopamp1.Init.PgaGain = OPAMP_PGA_GAIN_16_OR_MINUS_15;
   hopamp1.Init.UserTrimming = OPAMP_TRIMMING_FACTORY;
   if (HAL_OPAMP_Init(&hopamp1) != HAL_OK)
   {
@@ -471,7 +473,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 0;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 6799;
+  htim1.Init.Period = 1699;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -531,7 +533,7 @@ static void MX_TIM1_Init(void)
   sBreakDeadTimeConfig.Break2Polarity = TIM_BREAK2POLARITY_HIGH;
   sBreakDeadTimeConfig.Break2Filter = 0;
   sBreakDeadTimeConfig.Break2AFMode = TIM_BREAK_AFMODE_INPUT;
-  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_ENABLE;
   if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
   {
     Error_Handler();

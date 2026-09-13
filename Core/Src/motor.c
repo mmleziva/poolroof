@@ -16,6 +16,20 @@ typedef struct
 #define INPUT_FILTER_SAMPLES     8U
 #define INPUT_FILTER_THRESHOLD   6U
 
+typedef enum
+{
+    MOTOR_STATE_STOPPED = 0,
+
+    MOTOR_STATE_ACCEL_FORWARD,
+    MOTOR_STATE_RUN_FORWARD,
+    MOTOR_STATE_DECEL_FORWARD,
+
+    MOTOR_STATE_ACCEL_REVERSE,
+    MOTOR_STATE_RUN_REVERSE,
+    MOTOR_STATE_DECEL_REVERSE
+
+} MotorState_t;
+
 extern ADC_HandleTypeDef hadc2;
 extern TIM_HandleTypeDef htim1,htim2;
 
@@ -27,14 +41,24 @@ static InputFilter_t KON_ZFilter;
 static InputFilter_t KON_OFilter;
 static InputFilter_t ZAVFilter;
 
+volatile uint16_t CTPULS = 0U;
+static MotorState_t motorState = MOTOR_STATE_STOPPED;
+static uint8_t lastINKREMState = 0U;
+static uint16_t lastOUTESTPulseModulo = 0U;
+
 
 
 static void InputFilter_Update(InputFilter_t *filter, uint8_t sample);
 void Motor_Control_1ms(void);
 
-static uint16_t Motor_ADC2_Read(void)
+static uint16_t Motor_ADC2_Read(uint32_t channel)
 {
     uint16_t value = 0;
+    newConfig.Channel= channel;
+    if (HAL_ADC_ConfigChannel(&hadc2, &newConfig) != HAL_OK)
+    {
+      Error_Handler();
+    }
 
     if (HAL_ADC_Start(&hadc2) == HAL_OK)
     {
@@ -56,8 +80,23 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	       ------------------------------------------------- */
       if (htim->Instance == TIM2)
       {
-          HAL_GPIO_TogglePin(OUTEST_GPIO_Port, OUTEST_Pin);
-          uint16_t adc2 = Motor_ADC2_Read();
+          if (motorState == MOTOR_STATE_STOPPED)
+          {
+              HAL_GPIO_TogglePin(OUTEST_GPIO_Port, OUTEST_Pin);
+              lastOUTESTPulseModulo = (uint16_t)(CTPULS % 10U);
+          }
+          else
+          {
+              uint16_t pulseModulo = (uint16_t)(CTPULS % 10U);
+
+              if (pulseModulo != lastOUTESTPulseModulo)
+              {
+                  HAL_GPIO_TogglePin(OUTEST_GPIO_Port, OUTEST_Pin);
+                  lastOUTESTPulseModulo = pulseModulo;
+              }
+          }
+
+          uint16_t adc2 = Motor_ADC2_Read(ADC_CHANNEL_10);
 
              // zde s adc2 můžete dále pracovat
       }
@@ -85,6 +124,23 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
               InputFilter_Update(&ZAVFilter,
                                  !HAL_GPIO_ReadPin(ZAV_GPIO_Port, ZAV_Pin));
+
+              if ((motorState == MOTOR_STATE_ACCEL_FORWARD) ||
+                  (motorState == MOTOR_STATE_RUN_FORWARD) ||
+                  (motorState == MOTOR_STATE_DECEL_FORWARD))
+              {
+                  if ((lastINKREMState == 0U) && (INKREMFilter.state != 0U))
+                      CTPULS++;
+              }
+              else if ((motorState == MOTOR_STATE_ACCEL_REVERSE) ||
+                       (motorState == MOTOR_STATE_RUN_REVERSE) ||
+                       (motorState == MOTOR_STATE_DECEL_REVERSE))
+              {
+                  if ((lastINKREMState != 0U) && (INKREMFilter.state == 0U))
+                      CTPULS--;
+              }
+
+              lastINKREMState = INKREMFilter.state;
 
          //     HAL_GPIO_WritePin(OUTEST_GPIO_Port, OUTEST_Pin,
          //                       GetSTOP() || GetZAV() || GetOTV());	//t
@@ -168,23 +224,6 @@ uint8_t GetKON_O(void)
 #define MOTOR_MAX_SPEED 1000U
 #define MOTOR_SUPER_SPEED 1024U
 
-
-typedef enum
-{
-    MOTOR_STATE_STOPPED = 0,
-
-    MOTOR_STATE_ACCEL_FORWARD,
-    MOTOR_STATE_RUN_FORWARD,
-    MOTOR_STATE_DECEL_FORWARD,
-
-    MOTOR_STATE_ACCEL_REVERSE,
-    MOTOR_STATE_RUN_REVERSE,
-    MOTOR_STATE_DECEL_REVERSE
-
-} MotorState_t;
-
-
-static MotorState_t motorState = MOTOR_STATE_STOPPED;
 
 static uint16_t motorSpeed = 0;
 static uint16_t rampStartSpeed = 0;

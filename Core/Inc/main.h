@@ -75,7 +75,7 @@ void Error_Handler(void);
 #define ZAV_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
-
+extern ADC_ChannelConfTypeDef newConfig;
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

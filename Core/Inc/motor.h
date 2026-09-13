@@ -18,6 +18,9 @@ uint8_t GetINKREM(void);
 uint8_t GetKON_Z(void);
 uint8_t GetKON_O(void);
 uint8_t GetZAV(void);
+
+extern volatile uint16_t CTPULS;
+
 typedef enum
 {
     MOTOR_STOP = 0,
