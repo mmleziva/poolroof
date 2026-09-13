@@ -31,6 +31,7 @@ typedef enum
 } MotorState_t;
 
 extern ADC_HandleTypeDef hadc2;
+extern DAC_HandleTypeDef hdac1;
 extern TIM_HandleTypeDef htim1,htim2;
 
 static InputFilter_t STOPFilter;
@@ -49,6 +50,7 @@ static uint16_t lastOUTESTPulseModulo = 0U;
 
 
 static void InputFilter_Update(InputFilter_t *filter, uint8_t sample);
+static void Motor_SetCompThresholdDac(uint16_t threshold);
 void Motor_Control_1ms(void);
 
 static uint16_t Motor_ADC2_Read(uint32_t channel)
@@ -167,6 +169,15 @@ static void InputFilter_Update(InputFilter_t *filter, uint8_t sample)
     }
 }
 
+static void Motor_SetCompThresholdDac(uint16_t threshold)
+{
+    if (threshold > 4095U)
+        threshold = 4095U;
+
+    if (HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, threshold) != HAL_OK)
+        Error_Handler();
+}
+
 uint8_t GetSTOP(void)
 {
    // return (( ~STOPFilter.state) & 0x1);
@@ -218,7 +229,7 @@ uint8_t GetKON_O(void)
 #define STARTSPEED       100U
 #define STOPSPEED        100U
 
-#define STARTRAMPA       3U       /* acceleration time [s] */
+#define STARTRAMPA       4U       /* acceleration time [s] */
 #define STOPRAMPA        2U       /* deceleration time [s] */
 
 #define MOTOR_MAX_SPEED 1000U
@@ -269,6 +280,21 @@ void Motor_SetSpeed(MotorDirection dir, uint16_t speed)
         (uint16_t)((uint32_t)speed *
                    (__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U) /
                    MOTOR_SUPER_SPEED);
+
+    if (pwm > MOTOR_ADC_TRIGGER_BEFORE_PWM_END_TICKS)
+    {
+        __HAL_TIM_SET_COMPARE(&htim1,
+                              TIM_CHANNEL_4,
+                              (uint16_t)(pwm - MOTOR_ADC_TRIGGER_BEFORE_PWM_END_TICKS));
+    }
+    else if (pwm > 1U)
+    {
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, (uint16_t)(pwm - 1U));
+    }
+    else
+    {
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, 0U);
+    }
 
     switch(dir)
     {
@@ -321,6 +347,7 @@ void Motor_Control_1ms(void)
             rampCounter = 0;
 
             Motor_SetSpeed(MOTOR_STOP, 0);
+            Motor_SetCompThresholdDac(MOTOR_COMP_THRESHOLD_DAC);
 
             /*
              * STOP has the highest priority.
@@ -384,6 +411,10 @@ void Motor_Control_1ms(void)
                                     rampTime_ms,
                                     rampCounter);
 
+            Motor_SetCompThresholdDac(Motor_Ramp((uint16_t)(2U * MOTOR_COMP_THRESHOLD_DAC),
+                                                 MOTOR_COMP_THRESHOLD_DAC,
+                                                 rampTime_ms,
+                                                 rampCounter));
             Motor_SetSpeed(MOTOR_FORWARD, motorSpeed);
 
             if (rampCounter < rampTime_ms)
@@ -412,6 +443,7 @@ void Motor_Control_1ms(void)
             }
 
             motorSpeed = MOTOR_MAX_SPEED;
+            Motor_SetCompThresholdDac(MOTOR_COMP_THRESHOLD_DAC);
             Motor_SetSpeed(MOTOR_FORWARD, motorSpeed);
 
             break;
@@ -429,6 +461,7 @@ void Motor_Control_1ms(void)
                                     rampTime_ms,
                                     rampCounter);
 
+            Motor_SetCompThresholdDac(MOTOR_COMP_THRESHOLD_DAC);
             Motor_SetSpeed(MOTOR_FORWARD, motorSpeed);
 
             if (rampCounter < rampTime_ms)
@@ -469,6 +502,7 @@ void Motor_Control_1ms(void)
                                     rampTime_ms,
                                     rampCounter);
 
+            Motor_SetCompThresholdDac(MOTOR_COMP_THRESHOLD_DAC);
             Motor_SetSpeed(MOTOR_REVERSE, motorSpeed);
 
             if (rampCounter < rampTime_ms)
@@ -497,6 +531,7 @@ void Motor_Control_1ms(void)
             }
 
             motorSpeed = MOTOR_MAX_SPEED;
+            Motor_SetCompThresholdDac(MOTOR_COMP_THRESHOLD_DAC);
             Motor_SetSpeed(MOTOR_REVERSE, motorSpeed);
 
             break;
@@ -514,6 +549,7 @@ void Motor_Control_1ms(void)
                                     rampTime_ms,
                                     rampCounter);
 
+            Motor_SetCompThresholdDac(MOTOR_COMP_THRESHOLD_DAC);
             Motor_SetSpeed(MOTOR_REVERSE, motorSpeed);
 
             if (rampCounter < rampTime_ms)
@@ -541,6 +577,7 @@ void Motor_Control_1ms(void)
 
             motorState = MOTOR_STATE_STOPPED;
 
+            Motor_SetCompThresholdDac(MOTOR_COMP_THRESHOLD_DAC);
             Motor_SetSpeed(MOTOR_STOP, 0);
 
             break;

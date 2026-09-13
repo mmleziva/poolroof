@@ -76,6 +76,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 extern ADC_ChannelConfTypeDef newConfig;
+extern volatile uint16_t ADC1_InjectedValue;
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

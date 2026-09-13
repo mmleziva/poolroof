@@ -21,6 +21,10 @@ uint8_t GetZAV(void);
 
 extern volatile uint16_t CTPULS;
 
+#define MOTOR_ADC_TRIGGER_BEFORE_PWM_END_TICKS 340U
+#define MOTOR_COMP_BLANKING_TICKS              340U
+#define MOTOR_COMP_THRESHOLD_DAC               124U
+
 typedef enum
 {
     MOTOR_STOP = 0,

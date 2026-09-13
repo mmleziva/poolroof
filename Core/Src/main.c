@@ -31,9 +31,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define MOTOR_ADC_TRIGGER_DELAY_TICKS 340U
-#define MOTOR_COMP_BLANKING_TICKS     340U
-#define MOTOR_COMP_THRESHOLD_DAC 124U// 1241U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -60,6 +57,7 @@ UART_HandleTypeDef huart1;
 /* USER CODE BEGIN PV */
 int atest;
 ADC_ChannelConfTypeDef newConfig;
+volatile uint16_t ADC1_InjectedValue = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -123,7 +121,7 @@ int main(void)
   MX_DAC1_Init();
   /* USER CODE BEGIN 2 */
 
-  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, MOTOR_ADC_TRIGGER_DELAY_TICKS);
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, 0U);
   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, MOTOR_COMP_BLANKING_TICKS);
   /* Nastavení konstantního prahu COMP3 pomocí DAC1_CH1 */
   if (HAL_DAC_Start(&hdac1, DAC_CHANNEL_1) != HAL_OK)
@@ -132,7 +130,7 @@ int main(void)
   { Error_Handler(); }
 
   HAL_OPAMP_Start(&hopamp1);
-  HAL_ADCEx_InjectedStart(&hadc1);
+  HAL_ADCEx_InjectedStart_IT(&hadc1);
   HAL_COMP_Start(&hcomp3);//t
   HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_4);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_5);
@@ -473,7 +471,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 0;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 1699;
+  htim1.Init.Period = 16999;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -751,6 +749,13 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  if (hadc->Instance == ADC1)
+  {
+    ADC1_InjectedValue = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
+  }
+}
 
 /* USER CODE END 4 */
 
