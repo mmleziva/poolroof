@@ -136,6 +136,8 @@ int main(void)
   HAL_OPAMP_Start(&hopamp1);
   if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)ADC1_DMA_Buffer, ADC1_DMA_BUFFER_LENGTH) != HAL_OK)
   { Error_Handler(); }
+  __HAL_DMA_DISABLE_IT(&hdma_adc1, DMA_IT_HT);
+  __HAL_DMA_DISABLE_IT(&hdma_adc1, DMA_IT_TC);
   HAL_COMP_Start(&hcomp3);//t
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_5);
@@ -436,7 +438,7 @@ static void MX_OPAMP1_Init(void)
   hopamp1.Init.InternalOutput = DISABLE;
   hopamp1.Init.TimerControlledMuxmode = OPAMP_TIMERCONTROLLEDMUXMODE_DISABLE;
   hopamp1.Init.PgaConnect = OPAMP_PGA_CONNECT_INVERTINGINPUT_IO0;
-  hopamp1.Init.PgaGain = OPAMP_PGA_GAIN_16_OR_MINUS_15;
+  hopamp1.Init.PgaGain = OPAMP_PGA_GAIN_64_OR_MINUS_63;
   hopamp1.Init.UserTrimming = OPAMP_TRIMMING_FACTORY;
   if (HAL_OPAMP_Init(&hopamp1) != HAL_OK)
   {
@@ -769,13 +771,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
-{
-  if (hadc->Instance == ADC1)
-  {
-    ADC1_LastValue = ADC1_DMA_Buffer[ADC1_DMA_BUFFER_LENGTH - 1U];
-  }
-}
 
 /* USER CODE END 4 */
 

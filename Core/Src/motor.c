@@ -15,6 +15,9 @@ typedef struct
 
 #define INPUT_FILTER_SAMPLES     8U
 #define INPUT_FILTER_THRESHOLD   6U
+#define BLOCK_OTV 0x01U
+#define BLOCK_ZAV 0x02U
+static uint8_t directionBlocked = 0U;
 
 typedef enum
 {
@@ -144,8 +147,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
               lastINKREMState = INKREMFilter.state;
 
-         //     HAL_GPIO_WritePin(OUTEST_GPIO_Port, OUTEST_Pin,
-         //                       GetSTOP() || GetZAV() || GetOTV());	//t
+
               Motor_Control_1ms();//t
       }
  }
@@ -180,8 +182,8 @@ static void Motor_SetCompThresholdDac(uint16_t threshold)
 
 uint8_t GetSTOP(void)
 {
-   // return (( ~STOPFilter.state) & 0x1);
-    return (STOPFilter.state);
+    return (( ~STOPFilter.state) & 0x1);
+  //  return (STOPFilter.state);
 }
 
 uint8_t GetOTV(void)
@@ -336,6 +338,23 @@ void Motor_Control_1ms(void)
     uint32_t rampTime_ms;
 
 
+    static uint8_t lastOTV = 0U;
+    static uint8_t lastZAV = 0U;
+
+    uint8_t otv  = GetOTV();
+    uint8_t zav  = GetZAV();
+    uint8_t stop = GetSTOP();
+    uint8_t konO = GetKON_O();
+    uint8_t konZ = GetKON_Z();
+
+    /* Detekce náběžné hrany OTV a ZAV */
+    uint8_t otvRising = otv && !lastOTV;
+    uint8_t zavRising = zav && !lastZAV;
+
+    /* Uložení aktuálního stavu pro příští volání */
+    lastOTV = otv;
+    lastZAV = zav;
+
     switch (motorState)
     {
         /* -------------------------------------------------------------
@@ -350,16 +369,11 @@ void Motor_Control_1ms(void)
             Motor_SetCompThresholdDac(MOTOR_COMP_THRESHOLD_DAC);
 
             /*
-             * STOP has the highest priority.
-             */
-            if (GetSTOP())
-                break;
-
-            /*
              * Start forward.
              */
-            if (GetOTV() && !GetKON_O())
+            if (otvRising && !(directionBlocked == BLOCK_OTV))
             {
+            	directionBlocked = 0;
                 motorSpeed = STARTSPEED;
                 rampStartSpeed = STARTSPEED;
                 rampCounter = 0;
@@ -372,8 +386,9 @@ void Motor_Control_1ms(void)
             /*
              * Start reverse.
              */
-            else if (GetZAV() && !GetKON_Z())
+            else if (zavRising && !(directionBlocked == BLOCK_ZAV))
             {
+            	directionBlocked = 0;
                 motorSpeed = STARTSPEED;
                 rampStartSpeed = STARTSPEED;
                 rampCounter = 0;
@@ -395,7 +410,8 @@ void Motor_Control_1ms(void)
              * Loss of OTV, STOP or forward limit switch:
              * immediately change to controlled deceleration.
              */
-            if (GetSTOP() || !GetOTV() || GetKON_O())
+        	if(konO)directionBlocked = BLOCK_OTV;
+            if (stop || konO)
             {
                 rampStartSpeed = motorSpeed;
                 rampCounter = 0;
@@ -429,8 +445,8 @@ void Motor_Control_1ms(void)
          * FULL SPEED FORWARD
          * ------------------------------------------------------------- */
         case MOTOR_STATE_RUN_FORWARD:
-
-            if (GetSTOP() || !GetOTV() || GetKON_O())
+        	if(konO)directionBlocked = BLOCK_OTV;
+            if (stop || konO)
             {
                 /*
                  * Save the actual speed at the instant deceleration starts.
@@ -485,8 +501,8 @@ void Motor_Control_1ms(void)
          * ACCELERATION REVERSE
          * ------------------------------------------------------------- */
         case MOTOR_STATE_ACCEL_REVERSE:
-
-            if (GetSTOP() || !GetZAV() || GetKON_Z())
+        	if(konZ)directionBlocked = BLOCK_ZAV;
+            if (stop || konZ)
             {
                 rampStartSpeed = motorSpeed;
                 rampCounter = 0;
@@ -517,8 +533,8 @@ void Motor_Control_1ms(void)
          * FULL SPEED REVERSE
          * ------------------------------------------------------------- */
         case MOTOR_STATE_RUN_REVERSE:
-
-            if (GetSTOP() || !GetZAV() || GetKON_Z())
+        	if(konZ)directionBlocked = BLOCK_ZAV;
+            if (stop || konZ)
             {
                 /*
                  * Save the actual speed at the instant deceleration starts.
