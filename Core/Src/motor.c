@@ -49,34 +49,14 @@ volatile uint16_t CTPULS = 0U;
 static MotorState_t motorState = MOTOR_STATE_STOPPED;
 static uint8_t lastINKREMState = 0U;
 static uint16_t lastOUTESTPulseModulo = 0U;
-
+uint16_t kanalADC2ready;
 
 
 static void InputFilter_Update(InputFilter_t *filter, uint8_t sample);
 static void Motor_SetCompThresholdDac(uint16_t threshold);
 void Motor_Control_1ms(void);
 
-static uint16_t Motor_ADC2_Read(uint32_t channel)
-{
-    uint16_t value = 0;
-    newConfig.Channel= channel;
-    if (HAL_ADC_ConfigChannel(&hadc2, &newConfig) != HAL_OK)
-    {
-      Error_Handler();
-    }
 
-    if (HAL_ADC_Start(&hadc2) == HAL_OK)
-    {
-        if (HAL_ADC_PollForConversion(&hadc2, 1) == HAL_OK)
-        {
-            value = (uint16_t)HAL_ADC_GetValue(&hadc2);
-        }
-
-        HAL_ADC_Stop(&hadc2);
-    }
-
-    return value;
-}
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
  {
@@ -88,11 +68,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
           if (motorState == MOTOR_STATE_STOPPED)
           {
               HAL_GPIO_TogglePin(OUTEST_GPIO_Port, OUTEST_Pin);
-              lastOUTESTPulseModulo = (uint16_t)(CTPULS % 10U);
+              lastOUTESTPulseModulo = (uint16_t)(CTPULS / 10U);
           }
           else
           {
-              uint16_t pulseModulo = (uint16_t)(CTPULS % 10U);
+              uint16_t pulseModulo = (uint16_t)(CTPULS / 10U);
 
               if (pulseModulo != lastOUTESTPulseModulo)
               {
@@ -101,9 +81,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
               }
           }
 
-          uint16_t adc2 = Motor_ADC2_Read(ADC_CHANNEL_10);
-
-             // zde s adc2 můžete dále pracovat
       }
       /* -------------------------------------------------
              TIM3 - vzorkování vstupů každou 1 ms
@@ -150,6 +127,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
               Motor_Control_1ms();//t
       }
+      if (htim->Instance == TIM4)
+      {
+
+    	  kanalADC2ready++;//= cislo kanalu je predchozi index v ADC2_DMA_Buffer + 1
+      }
  }
 
 static void InputFilter_Update(InputFilter_t *filter, uint8_t sample)
@@ -183,12 +165,10 @@ static void Motor_SetCompThresholdDac(uint16_t threshold)
 uint8_t GetSTOP(void)
 {
     return (( ~STOPFilter.state) & 0x1);
-  //  return (STOPFilter.state);
 }
 
 uint8_t GetOTV(void)
 {
-   // return (( ~OTVFilter.state) & 0x1);
     return (OTVFilter.state);
 }
 
@@ -199,18 +179,19 @@ uint8_t GetINKREM(void)
 
 uint8_t GetZAV(void)
 {
-    //return (( ~ZAVFilter.state) & 0x1);
     return (ZAVFilter.state);
 }
 
 uint8_t GetKON_Z(void)
 {
     return KON_ZFilter.state;
+	return 0;
 }
 
 uint8_t GetKON_O(void)
 {
     return KON_OFilter.state;
+	return 0;
 }
 
 /* -------------------------------------------------------------------------
@@ -225,14 +206,14 @@ uint8_t GetKON_O(void)
  * STARTSPEED = speed at the beginning of an acceleration ramp
  * STOPSPEED  = final low speed before switching the PWM off
  *
- * STARTRAMPA and STOPRAMPA are in seconds and may be 1 ... 10 s.
+ * STARTRAMPA and STOPRAMPA are in seconds and may  1 ... 10 s.
  * ------------------------------------------------------------------------- */
 
-#define STARTSPEED       100U
+#define STARTSPEED       200U
 #define STOPSPEED        100U
 
 #define STARTRAMPA       4U       /* acceleration time [s] */
-#define STOPRAMPA        2U       /* deceleration time [s] */
+#define STOPRAMPA        1U       /* deceleration time [s] */
 
 #define MOTOR_MAX_SPEED 1000U
 #define MOTOR_SUPER_SPEED 1024U
@@ -364,7 +345,8 @@ void Motor_Control_1ms(void)
 
             motorSpeed = 0;
             rampCounter = 0;
-
+            if(konO)directionBlocked = BLOCK_OTV;
+            if(konZ)directionBlocked = BLOCK_ZAV;
             Motor_SetSpeed(MOTOR_STOP, 0);
             Motor_SetCompThresholdDac(MOTOR_COMP_THRESHOLD_DAC);
 
@@ -373,7 +355,7 @@ void Motor_Control_1ms(void)
              */
             if (otvRising && !(directionBlocked == BLOCK_OTV))
             {
-            	directionBlocked = 0;
+            	//directionBlocked = 0;
                 motorSpeed = STARTSPEED;
                 rampStartSpeed = STARTSPEED;
                 rampCounter = 0;
@@ -388,7 +370,7 @@ void Motor_Control_1ms(void)
              */
             else if (zavRising && !(directionBlocked == BLOCK_ZAV))
             {
-            	directionBlocked = 0;
+            	//directionBlocked = 0;
                 motorSpeed = STARTSPEED;
                 rampStartSpeed = STARTSPEED;
                 rampCounter = 0;
@@ -411,12 +393,18 @@ void Motor_Control_1ms(void)
              * immediately change to controlled deceleration.
              */
         	if(konO)directionBlocked = BLOCK_OTV;
-            if (stop || konO)
-            {
+        	else
+        	if(!konZ && !(directionBlocked == BLOCK_OTV))
+        		directionBlocked =0;
+            //if (stop || konO)
+        	//if (stop || (directionBlocked == BLOCK_OTV))
+        	if (stop || (directionBlocked == BLOCK_OTV) || zavRising )
+        	{
                 rampStartSpeed = motorSpeed;
                 rampCounter = 0;
 
-                motorState = MOTOR_STATE_DECEL_FORWARD;
+               // motorState = MOTOR_STATE_DECEL_FORWARD;
+                motorState = MOTOR_STATE_STOPPED;
                 break;
             }
 
@@ -446,7 +434,12 @@ void Motor_Control_1ms(void)
          * ------------------------------------------------------------- */
         case MOTOR_STATE_RUN_FORWARD:
         	if(konO)directionBlocked = BLOCK_OTV;
-            if (stop || konO)
+        	else
+        	if(!konZ && !(directionBlocked == BLOCK_OTV))
+        		directionBlocked =0;
+           // if (stop || konO)
+        	//if (stop || (directionBlocked == BLOCK_OTV))
+        	if (stop || (directionBlocked == BLOCK_OTV) || zavRising )
             {
                 /*
                  * Save the actual speed at the instant deceleration starts.
@@ -454,7 +447,8 @@ void Motor_Control_1ms(void)
                 rampStartSpeed = motorSpeed;
                 rampCounter = 0;
 
-                motorState = MOTOR_STATE_DECEL_FORWARD;
+              //  motorState = MOTOR_STATE_DECEL_FORWARD;
+                motorState = MOTOR_STATE_STOPPED;
                 break;
             }
 
@@ -469,7 +463,10 @@ void Motor_Control_1ms(void)
          * DECELERATION FORWARD
          * ------------------------------------------------------------- */
         case MOTOR_STATE_DECEL_FORWARD:
-
+        	if(konO)directionBlocked = BLOCK_OTV;
+        	else
+        	if(!konZ && !(directionBlocked == BLOCK_OTV))
+        		directionBlocked =0;
             rampTime_ms = (uint32_t)STOPRAMPA * 1000U;
 
             motorSpeed = Motor_Ramp(rampStartSpeed,
@@ -502,12 +499,18 @@ void Motor_Control_1ms(void)
          * ------------------------------------------------------------- */
         case MOTOR_STATE_ACCEL_REVERSE:
         	if(konZ)directionBlocked = BLOCK_ZAV;
-            if (stop || konZ)
+        	else
+        	if(!konO && !(directionBlocked == BLOCK_ZAV))
+        		directionBlocked =0;
+        	//if (stop || (directionBlocked == BLOCK_ZAV))
+          //  if (stop || konZ)
+        	if (stop || (directionBlocked == BLOCK_ZAV) || otvRising)
             {
                 rampStartSpeed = motorSpeed;
                 rampCounter = 0;
 
-                motorState = MOTOR_STATE_DECEL_REVERSE;
+               // motorState = MOTOR_STATE_DECEL_REVERSE;
+                motorState = MOTOR_STATE_STOPPED;
                 break;
             }
 
@@ -534,7 +537,12 @@ void Motor_Control_1ms(void)
          * ------------------------------------------------------------- */
         case MOTOR_STATE_RUN_REVERSE:
         	if(konZ)directionBlocked = BLOCK_ZAV;
-            if (stop || konZ)
+        	else
+        	if(!konO && !(directionBlocked == BLOCK_ZAV))
+        		directionBlocked =0;
+        	//if (stop || (directionBlocked == BLOCK_ZAV))
+            //if (stop || konZ)
+        	if (stop || (directionBlocked == BLOCK_ZAV) || otvRising)
             {
                 /*
                  * Save the actual speed at the instant deceleration starts.
@@ -542,7 +550,8 @@ void Motor_Control_1ms(void)
                 rampStartSpeed = motorSpeed;
                 rampCounter = 0;
 
-                motorState = MOTOR_STATE_DECEL_REVERSE;
+               // motorState = MOTOR_STATE_DECEL_REVERSE;
+                motorState = MOTOR_STATE_STOPPED;
                 break;
             }
 
@@ -557,7 +566,8 @@ void Motor_Control_1ms(void)
          * DECELERATION REVERSE
          * ------------------------------------------------------------- */
         case MOTOR_STATE_DECEL_REVERSE:
-
+        	if(konZ)directionBlocked = BLOCK_ZAV;
+        	else if(!konO && !(directionBlocked == BLOCK_ZAV))directionBlocked =0;
             rampTime_ms = (uint32_t)STOPRAMPA * 1000U;
 
             motorSpeed = Motor_Ramp(rampStartSpeed,
@@ -598,4 +608,9 @@ void Motor_Control_1ms(void)
 
             break;
     }
+}
+
+void ADC2calc(void)//
+{
+	uint8_t calc=0;
 }

@@ -31,7 +31,7 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -55,7 +55,7 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-
+void ADC2calc(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
@@ -76,9 +76,11 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 #define ADC1_DMA_BUFFER_LENGTH 100U
+#define ADC2_DMA_BUFFER_LENGTH 4U
 extern ADC_ChannelConfTypeDef newConfig;
 extern volatile uint16_t ADC1_LastValue;
 extern volatile uint16_t ADC1_DMA_Buffer[ADC1_DMA_BUFFER_LENGTH];
+extern volatile uint16_t ADC2_DMA_Buffer[ADC2_DMA_BUFFER_LENGTH];
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
